@@ -48,7 +48,7 @@ func resultChallengeRoute(c *gin.Context) {
 		}
 
 		difficultyCalculator.IncreaseCounter()
-		*difficulty = difficultyCalculator.CalculateNextDifficulty(*difficulty)
+		// *difficulty = difficultyCalculator.CalculateNextDifficulty(*difficulty)
 
 		c.String(202, "Correct")
 		color.Info.Tips(swalletid + " succesfully mined a block!")

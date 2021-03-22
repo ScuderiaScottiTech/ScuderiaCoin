@@ -11,11 +11,13 @@ type DifficultyCalculator struct {
 	limiter          *ratecounter.RateCounter
 	BlockTargetHours int64
 	MinDifficulty    int
+	MaxDifficulty    int
 }
 
-func (dc *DifficultyCalculator) Initialize(blockTargetHours int64, minDifficulty int, reportratestats bool) {
+func (dc *DifficultyCalculator) Initialize(blockTargetHours int64, minDifficulty int, maxdifficulty int, reportratestats bool) {
 	dc.BlockTargetHours = blockTargetHours
 	dc.MinDifficulty = minDifficulty
+	dc.MaxDifficulty = maxdifficulty
 
 	dc.limiter = ratecounter.NewRateCounter(time.Hour)
 
@@ -29,7 +31,7 @@ func (dc *DifficultyCalculator) IncreaseCounter() {
 }
 
 func (dc *DifficultyCalculator) CalculateNextDifficulty(difficulty int) int {
-	if dc.limiter.Rate() > int64(dc.BlockTargetHours) {
+	if dc.limiter.Rate() > int64(dc.BlockTargetHours) && difficulty < dc.MaxDifficulty {
 		return difficulty + 1
 	} else if dc.limiter.Rate() < int64(dc.BlockTargetHours) && dc.MinDifficulty < difficulty {
 		return difficulty - 1

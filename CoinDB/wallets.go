@@ -45,3 +45,11 @@ func (w *Wallet) DecrementBalance(amount uint64) error {
 	_, err = pdb.Model(w).WherePK().Update()
 	return err
 }
+
+func GetTopWallets() ([]Wallet, error) {
+	var wallets []Wallet
+
+	err := pdb.Model(&wallets).OrderExpr("balance DESC").Where("wallet.balance != 0").Limit(10).Select()
+
+	return wallets, err
+}

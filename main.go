@@ -19,6 +19,7 @@ var (
 	databasePassword = flag.String("dbpass", "", "Database password for user postgres")
 	difficulty       = flag.Int("miningdifficulty", 4, "Mining difficulty")
 	mindifficulty    = flag.Int("mindifficulty", 4, "Minimum difficulty")
+	maxdifficulty    = flag.Int("maxdifficulty", 10, "Maximum difficulty")
 	reward           = flag.Int("minereward", 10, "Reward for a mined challenge")
 	blocktargethours = flag.Int("targethours", 10, "Block target time")
 	reportratestats  = flag.Bool("reportrate", false, "Report rate statistics")
@@ -31,12 +32,14 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	coindb.InitDatabaseConnection(*databaseAddr, *databasePassword)
-	difficultyCalculator.Initialize(int64(*blocktargethours), *mindifficulty, *reportratestats)
+	difficultyCalculator.Initialize(int64(*blocktargethours), *mindifficulty, *maxdifficulty, *reportratestats)
 	RefreshChallenge()
+
+	go PeriodicCalculator()
 
 	api := gin.Default()
 
-	resultLimiter := ginlimiter.NewRateLimiter(time.Second, 1, func(c *gin.Context) (string, error) {
+	resultLimiter := ginlimiter.NewRateLimiter(time.Second, 5, func(c *gin.Context) (string, error) {
 		walletid := c.Query("walletid")
 		magic := c.Query("magic")
 
@@ -55,8 +58,15 @@ func main() {
 
 	api.GET("/mine/getChallenge", getChallengeRoute)
 	api.GET("/mine/resultChallenge", resultLimiter.Middleware(), resultChallengeRoute)
-	
-	api.GET("/transactions/list")
+
+	// api.GET("/transactions/list")
 
 	api.Run(*host + ":" + *port)
+}
+
+func PeriodicCalculator() {
+	for {
+		time.Sleep(6 * time.Minute)
+		*difficulty = difficultyCalculator.CalculateNextDifficulty(*difficulty)
+	}
 }
