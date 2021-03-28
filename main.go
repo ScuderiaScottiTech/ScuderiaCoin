@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"math/rand"
 	"time"
@@ -9,7 +8,6 @@ import (
 	coindb "github.com/ScuderiaScottiTech/ScuderiaCoinMineAPI/CoinDB"
 	"github.com/ScuderiaScottiTech/ScuderiaCoinMineAPI/DifficultyAlgorithm"
 	"github.com/gin-gonic/gin"
-	ginlimiter "github.com/julianshen/gin-limiter"
 )
 
 var (
@@ -17,12 +15,17 @@ var (
 	port             = flag.String("port", "8989", "Listening port")
 	databaseAddr     = flag.String("dbconn", "", "Address and port of the postgres database")
 	databasePassword = flag.String("dbpass", "", "Database password for user postgres")
-	difficulty       = flag.Int("miningdifficulty", 4, "Mining difficulty")
-	mindifficulty    = flag.Int("mindifficulty", 4, "Minimum difficulty")
-	maxdifficulty    = flag.Int("maxdifficulty", 10, "Maximum difficulty")
-	reward           = flag.Int("minereward", 10, "Reward for a mined challenge")
-	blocktargethours = flag.Int("targethours", 10, "Block target time")
-	reportratestats  = flag.Bool("reportrate", false, "Report rate statistics")
+
+	difficulty    = flag.Int("miningdifficulty", 4, "Mining difficulty")
+	mindifficulty = flag.Int("mindifficulty", 4, "Minimum difficulty")
+	maxdifficulty = flag.Int("maxdifficulty", 10, "Maximum difficulty")
+
+	reward        = flag.Int("minereward", 10, "Reward for a mined challenge")
+	rewardtarget  = flag.Int("targethours", 30, "Reward target time")
+	targetminutes = flag.Int("targetminutes", 15, "Reward minutes")
+
+	reportratestats = flag.Bool("reportrate", false, "Report rate statistics")
+	apiratelimiter  = flag.Int("apiratelimiter", 6, "Rate limiter allowance")
 )
 
 var difficultyCalculator = &DifficultyAlgorithm.DifficultyCalculator{}
@@ -32,41 +35,28 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	coindb.InitDatabaseConnection(*databaseAddr, *databasePassword)
-	difficultyCalculator.Initialize(int64(*blocktargethours), *mindifficulty, *maxdifficulty, *reportratestats)
+	difficultyCalculator.Initialize(*rewardtarget, *targetminutes, *reward, *mindifficulty, *maxdifficulty, *reportratestats)
 	RefreshChallenge()
 
-	go PeriodicCalculator()
+	go difficultyCalculator.PeriodicCalculator(difficulty)
 
 	api := gin.Default()
 
-	resultLimiter := ginlimiter.NewRateLimiter(time.Second, 5, func(c *gin.Context) (string, error) {
-		walletid := c.Query("walletid")
-		magic := c.Query("magic")
+	// apiLimiter := ginlimiter.NewRateLimiter(time.Second, int64(*apiratelimiter), func(c *gin.Context) (string, error) {
+	// 	return "", nil
+	// })
 
-		if len(magic) >= 150 || len(walletid) >= 38 {
-			c.String(400, "A query parameter is too long")
-			return "", errors.New("query parameter length exceeded")
-		}
+	mine := api.Group("/mine")
+	{
+		mine.GET("/getChallenge", getChallengeRoute)
+		mine.GET("/resultChallenge", resultChallengeRoute)
+		mine.GET("/statistics", mineStatistics)
+	}
 
-		if walletid != "" && magic != "" {
-			return "", nil
-		}
-
-		c.String(400, "A query parameter is missing")
-		return "", errors.New("a query parameter is missing")
-	})
-
-	api.GET("/mine/getChallenge", getChallengeRoute)
-	api.GET("/mine/resultChallenge", resultLimiter.Middleware(), resultChallengeRoute)
-
-	// api.GET("/transactions/list")
+	wallet := api.Group("/wallet")
+	{
+		wallet.GET("/balance", walletBalanceRoute)
+	}
 
 	api.Run(*host + ":" + *port)
-}
-
-func PeriodicCalculator() {
-	for {
-		time.Sleep(6 * time.Minute)
-		*difficulty = difficultyCalculator.CalculateNextDifficulty(*difficulty)
-	}
 }
