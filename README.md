@@ -1,2 +1,3 @@
-# 2021 VERSION OF SCUDERIACOIN
-# ARCHIVED
+# We have moved!
+
+Moved to: https://gitlab.scuderia.tech/scuderia/ScuderiaCoin
